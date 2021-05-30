@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type Feed struct {
@@ -49,9 +50,11 @@ type Author struct {
 }
 
 func main() {
-	//openAndReadXml()
+	openAndReadXml()
+
 	//getNotionPage()
 	//getBlockOnPage()
+	//fmt.Println("Suca")
 }
 
 func openAndReadXml() {
@@ -77,8 +80,13 @@ func openAndReadXml() {
 
 	for i := 0; i < len(feed.Entry); i++ {
 		for j := 0; j < len(feed.Entry[i].Author); j++ {
-			fmt.Println(feed.Entry[i].Author[j].Name)
-			var obj Task = Task{Author: feed.Entry[i].Author[j].Name, Title: feed.Entry[i].Title, Description: feed.Entry[i].Description, Milestone: feed.Entry[i].Milestone}
+			//fmt.Println(feed.Entry[i].Author[j].Name)
+			var obj Task = Task{
+				Author:      feed.Entry[i].Author[j].Name,
+				Title:       feed.Entry[i].Title,
+				Description: feed.Entry[i].Description,
+				Milestone:   feed.Entry[i].Milestone,
+			}
 			arr = append(arr, obj)
 		}
 	}
@@ -92,37 +100,140 @@ func openAndReadXml() {
 	// 	}
 	// }
 
-	fmt.Println(arr)
+	fmt.Println(arr[0])
+
+	addToDoFromXmlToNotionPage(arr)
 }
 
-func connectToNotion() {
-	url := "https://api.notion.com/v1/databases/" + s.DatabaseId
-	method := "GET"
+func addToDoFromXmlToNotionPage(arr []Task) {
+	url := "https://api.notion.com/v1/blocks/" + s.BlockIdPatch
+	method := "PATCH"
+	author := arr[0].Author
+	fmt.Print(author)
 
-	client := &http.Client{}
-	req, err := http.NewRequest(method, url, nil)
+	var block []string
+	for _, value := range arr {
 
-	if err != nil {
-		fmt.Println(err)
-		return
+		author := value.Author
+		title := value.Title
+		description := value.Description
+		milestone := value.Milestone
+
+		first_block := `{
+			"children": [
+				{
+					"object": "block",
+					"type": "heading_2",
+					"heading_2": {
+						"text": [
+							{
+								"type": "text",
+								"text": {
+									"content": "To do:"
+								},
+								"annotations": {
+									"bold": true,
+									"italic": false,
+									"strikethrough": false,
+									"underline": false,
+									"code": false,
+									"color": "orange_background"
+								}
+							}
+						]
+					}
+				},`
+
+		block = append(block, `{
+			"object": "block",
+			"type": "bulleted_list_item",
+			"bulleted_list_item": {
+				"text": [
+					{
+						"type": "text",
+						"text": {
+							"content": "`+title+`",
+							"link": null
+						}
+					}
+				]
+			}
+},
+{
+			
+			"object": "block",
+			"type": "bulleted_list_item",
+			"bulleted_list_item": {
+				"text": [
+					{
+						"type": "text",
+						"text": {
+							"content": "`+author+`",
+							"link": null
+						}
+					}
+				]
+			}
+},{
+			"object": "block",
+			"type": "bulleted_list_item",
+			"bulleted_list_item": {
+				"text": [
+					{
+						"type": "text",
+						"text": {
+							"content": "`+description+`",
+							"link": null
+						}
+					}
+				]
+			}
+},{
+			"object": "block",
+			"type": "bulleted_list_item",
+			"bulleted_list_item": {
+				"text": [
+					{
+						"type": "text",
+						"text": {
+							"content": "`+milestone+`",
+							"link": null
+						}
+					}
+				]
+			}
+}]}`)
+
+		fmt.Println(first_block + block[0])
+		payload := strings.NewReader(first_block + block[0])
+
+		client := &http.Client{}
+		req, err := http.NewRequest(method, url, payload)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		req.Header.Add("Authorization", "Bearer "+s.Token)
+		req.Header.Add("Notion-Version", "2021-05-13")
+		req.Header.Add("Content-Type", "application/json")
+
+		res, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer res.Body.Close()
+
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			log.Fatalln(err)
+			fmt.Println(body)
+			return
+		}
+
+		fmt.Println("Tutto ok")
 	}
-	req.Header.Add("Authorization", "Bearer "+s.Token)
-	req.Header.Add("Notion-Version", "2021-05-13")
-
-	res, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println(jsonPrettyPrint(string(body)))
 }
 
 func getNotionPage() {
@@ -193,4 +304,34 @@ func jsonPrettyPrint(in string) string {
 		return in
 	}
 	return out.String()
+}
+
+func connectToNotion() {
+	url := "https://api.notion.com/v1/databases/" + s.DatabaseId
+	method := "GET"
+
+	client := &http.Client{}
+	req, err := http.NewRequest(method, url, nil)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	req.Header.Add("Authorization", "Bearer "+s.Token)
+	req.Header.Add("Notion-Version", "2021-05-13")
+
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(jsonPrettyPrint(string(body)))
 }
