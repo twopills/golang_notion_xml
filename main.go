@@ -1,5 +1,9 @@
 package main
 
+/**
+	Created by: github.com/twopill
+**/
+
 import (
 	"bytes"
 	"encoding/json"
