@@ -33,6 +33,7 @@ type Task struct {
 	Title       string
 	Description string
 	Milestone   string
+	Link        string
 }
 
 type Assignees struct {
@@ -51,10 +52,6 @@ type Author struct {
 
 func main() {
 	openAndReadXml()
-
-	//getNotionPage()
-	//getBlockOnPage()
-	//fmt.Println("Suca")
 }
 
 func openAndReadXml() {
@@ -63,8 +60,6 @@ func openAndReadXml() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	//fmt.Println("Successfully Opened users.xml")
 
 	defer xmlFile.Close()
 
@@ -80,27 +75,16 @@ func openAndReadXml() {
 
 	for i := 0; i < len(feed.Entry); i++ {
 		for j := 0; j < len(feed.Entry[i].Author); j++ {
-			//fmt.Println(feed.Entry[i].Author[j].Name)
 			var obj Task = Task{
 				Author:      feed.Entry[i].Author[j].Name,
 				Title:       feed.Entry[i].Title,
 				Description: feed.Entry[i].Description,
 				Milestone:   feed.Entry[i].Milestone,
+				Link:        feed.Entry[i].Link,
 			}
 			arr = append(arr, obj)
 		}
 	}
-
-	// for _, value := range feed.Entry {
-	// 	for _, assignees := range value.Assignees {
-	// 		for _, assignee := range assignees.Assignee {
-	// 			fmt.Println(assignee.Name)
-
-	// 		}
-	// 	}
-	// }
-
-	fmt.Println(arr[0])
 
 	addToDoFromXmlToNotionPage(arr)
 }
@@ -108,23 +92,21 @@ func openAndReadXml() {
 func addToDoFromXmlToNotionPage(arr []Task) {
 	url := "https://api.notion.com/v1/blocks/" + s.BlockIdPatch
 	method := "PATCH"
-	author := arr[0].Author
-	fmt.Print(author)
-
 	var block []string
-	for _, value := range arr {
 
-		author := value.Author
-		title := value.Title
-		description := value.Description
-		milestone := value.Milestone
+	for i := 0; i < len(arr); i++ {
+		author := arr[i].Author
+		title := arr[i].Title
+		description := arr[i].Description[0:35]
+		milestone := arr[i].Milestone
+		link := arr[i].Link
 
 		first_block := `{
 			"children": [
 				{
 					"object": "block",
-					"type": "heading_2",
-					"heading_2": {
+					"type": "to_do",
+					"to_do": {
 						"text": [
 							{
 								"type": "text",
@@ -160,7 +142,21 @@ func addToDoFromXmlToNotionPage(arr []Task) {
 			}
 },
 {
-			
+	"object": "block",
+	"type": "bulleted_list_item",
+	"bulleted_list_item": {
+		"text": [
+			{
+				"type": "text",
+				"text": {
+					"content": "Link",
+					"link": {"url": "`+link+`"}
+				}
+			}
+		]
+	}
+},
+{
 			"object": "block",
 			"type": "bulleted_list_item",
 			"bulleted_list_item": {
@@ -203,9 +199,7 @@ func addToDoFromXmlToNotionPage(arr []Task) {
 				]
 			}
 }]}`)
-
-		fmt.Println(first_block + block[0])
-		payload := strings.NewReader(first_block + block[0])
+		payload := strings.NewReader(first_block + block[i])
 
 		client := &http.Client{}
 		req, err := http.NewRequest(method, url, payload)
@@ -225,14 +219,6 @@ func addToDoFromXmlToNotionPage(arr []Task) {
 		}
 		defer res.Body.Close()
 
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			log.Fatalln(err)
-			fmt.Println(body)
-			return
-		}
-
-		fmt.Println("Tutto ok")
 	}
 }
 
@@ -260,10 +246,9 @@ func getNotionPage() {
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println(body)
 		return
 	}
-
-	fmt.Println(jsonPrettyPrint(string(body)))
 }
 
 func getBlockOnPage() {
@@ -291,10 +276,9 @@ func getBlockOnPage() {
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println(body)
 		return
 	}
-
-	fmt.Println(jsonPrettyPrint(string(body)))
 }
 
 func jsonPrettyPrint(in string) string {
@@ -329,9 +313,7 @@ func connectToNotion() {
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(body)
 		return
 	}
-
-	fmt.Println(jsonPrettyPrint(string(body)))
 }
